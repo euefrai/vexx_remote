@@ -23,6 +23,11 @@ export default function HostPage() {
   const [customPassword, setCustomPassword] = useState('');
   const [credentialsStatus, setCredentialsStatus] = useState<{ type: 'error' | 'success'; message: string } | null>(null);
 
+  const [agentOnline, setAgentOnline] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const captureStreamRef = useRef<MediaStream | null>(null);
+  const captureIntervalRef = useRef<number | null>(null);
+
   const localSessionRef = useRef(localSession);
 
   useEffect(() => {
@@ -32,22 +37,30 @@ export default function HostPage() {
   const [publicUrl, setPublicUrl] = useState('');
   const [tunnelLoading, setTunnelLoading] = useState(true);
 
+  // Monitorar se o VexxAgent local está ativo
   useEffect(() => {
-    let interval: number;
-    const fetchTunnel = async () => {
+    const checkAgent = async () => {
       try {
-        const res = await fetch(`${API_BASE}/tunnel`);
+        const res = await fetch('http://127.0.0.1:5050/status');
         const data = await res.json();
-        if (data.url) {
-          setPublicUrl(data.url);
-          setTunnelLoading(false);
-          clearInterval(interval);
-        }
-      } catch (e) {}
+        setAgentOnline(data.status === 'active');
+      } catch (e) {
+        setAgentOnline(false);
+      }
     };
-    fetchTunnel();
-    interval = window.setInterval(fetchTunnel, 2000);
+    checkAgent();
+    const interval = window.setInterval(checkAgent, 2500);
     return () => clearInterval(interval);
+  }, []);
+
+  // Limpeza de captura ao desmontar a página
+  useEffect(() => {
+    return () => {
+      if (captureIntervalRef.current) clearInterval(captureIntervalRef.current);
+      if (captureStreamRef.current) {
+        captureStreamRef.current.getTracks().forEach((t) => t.stop());
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -65,6 +78,19 @@ export default function HostPage() {
       setClientsConnected((count) => count + 1);
       setRequests((prev) => prev.filter((item) => item.clientId !== clientId));
       setStatus('Cliente conectado e autorizado');
+    });
+
+    // Escutar eventos de controle do cliente e repassar para o agente local
+    socket.on('client:control', async ({ action, payload }: { action: string; payload: any }) => {
+      try {
+        await fetch('http://127.0.0.1:5050/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, payload })
+        });
+      } catch (e) {
+        console.warn('Falha ao repassar comando para o agente local:', e);
+      }
     });
 
     socket.connect();
@@ -97,6 +123,66 @@ export default function HostPage() {
       console.error(error);
       setStatus('Falha ao criar sessão');
     }
+  }
+
+  async function startScreenCapture() {
+    if (isCapturing) return;
+
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: 15, width: 1280, height: 720 },
+        audio: false
+      });
+
+      captureStreamRef.current = stream;
+      setIsCapturing(true);
+
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.muted = true;
+      video.playsInline = true;
+      await video.play();
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 1280;
+      canvas.height = 720;
+      const ctx = canvas.getContext('2d');
+
+      const sendFrame = () => {
+        if (!ctx || video.paused || video.ended) return;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+        const base64 = dataUrl.split(',')[1];
+        if (base64 && localSessionRef.current) {
+          socket.emit('host:frame', { sessionId: localSessionRef.current, frame: base64 });
+        }
+      };
+
+      const intervalId = window.setInterval(sendFrame, 66);
+      captureIntervalRef.current = intervalId;
+
+      stream.getVideoTracks()[0].onended = () => {
+        stopScreenCapture();
+      };
+      
+      setStatus('Transmitindo tela...');
+    } catch (err) {
+      console.error('Erro ao iniciar captura de tela:', err);
+      setIsCapturing(false);
+    }
+  }
+
+  function stopScreenCapture() {
+    setIsCapturing(false);
+    if (captureIntervalRef.current) {
+      clearInterval(captureIntervalRef.current);
+      captureIntervalRef.current = null;
+    }
+    if (captureStreamRef.current) {
+      captureStreamRef.current.getTracks().forEach((track) => track.stop());
+      captureStreamRef.current = null;
+    }
+    setStatus('Sessão ativa, transmissão parada');
   }
 
   const copyCode = () => {
@@ -185,6 +271,61 @@ export default function HostPage() {
         <section className="grid gap-6 lg:grid-cols-[1fr_300px]">
           {/* Main Status Column */}
           <div className="space-y-6">
+
+            {/* Vexx Agent & Compartilhamento Card */}
+            <div className="bg-background-primary border-[0.5px] border-border-tertiary rounded-lg p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-[16px] font-medium text-text-primary">Conexão do Agente e Transmissão</h2>
+                  <p className="mt-1 text-[13px] text-text-secondary">
+                    Status do assistente local e controle de transmissão de tela.
+                  </p>
+                </div>
+                <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-[12px] font-medium ${
+                  agentOnline ? 'bg-background-success text-text-success border-[0.5px] border-border-success' : 'bg-background-danger text-text-danger border-[0.5px] border-border-danger'
+                }`}>
+                  <span className={`h-2 w-2 rounded-full ${agentOnline ? 'bg-text-success animate-pulse' : 'bg-text-danger'}`} />
+                  {agentOnline ? 'Agente Ativo' : 'Agente Offline'}
+                </div>
+              </div>
+
+              {!agentOnline ? (
+                <div className="bg-background-secondary border-[0.5px] border-border-tertiary rounded-md p-4 space-y-3">
+                  <p className="text-[13px] text-text-secondary leading-relaxed">
+                    <strong>Importante:</strong> O Vexx Agent local não foi detectado em execução no seu computador. 
+                    Para que outras pessoas consigam controlar a sua máquina, baixe e execute o agente. Não é necessário terminal, apenas clique duas vezes para abrir.
+                  </p>
+                  <a
+                    href="/VexxAgent.exe"
+                    download="VexxAgent.exe"
+                    className="inline-flex items-center gap-2 bg-background-info border-[0.5px] border-border-info rounded-md text-[13px] px-4 py-2 text-text-primary hover:bg-background-secondary active:scale-[0.98] transition-transform"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ti ti-download"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                    Baixar Vexx Agent para Windows
+                  </a>
+                </div>
+              ) : (
+                <div className="flex gap-4">
+                  {!isCapturing ? (
+                    <button
+                      onClick={startScreenCapture}
+                      className="bg-background-info border-[0.5px] border-border-info rounded-md text-[13px] px-4 py-2 text-text-primary hover:bg-background-secondary active:scale-[0.98] transition-transform flex items-center gap-2"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
+                      Compartilhar Tela e Permitir Controle
+                    </button>
+                  ) : (
+                    <button
+                      onClick={stopScreenCapture}
+                      className="bg-background-danger border-[0.5px] border-border-danger rounded-md text-[13px] px-4 py-2 text-text-primary hover:opacity-90 active:scale-[0.98] transition-transform flex items-center gap-2"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/><line x1="2" x2="22" y1="3" y2="17"/></svg>
+                      Parar Compartilhamento de Tela
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
             
             <div className="bg-background-primary border-[0.5px] border-border-tertiary rounded-lg p-5">
               <h2 className="text-[11px] font-medium text-text-secondary uppercase tracking-[0.06em] mb-2">Visão geral</h2>

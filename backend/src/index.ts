@@ -5,8 +5,6 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import helmet from 'helmet';
 import { createSession, getSession, joinHost, addRequest, approveClient, rejectClient, clientConnected, pruneSessions, configureSessionCredentials, findSessionByName } from './session';
-import { moveMouse, moveMouseAbsolute, mouseToggle, click, scroll, typeKeyboard, typeString } from './robotControl';
-import { startStreamer, stopStreamer } from './streamManager';
 import { startTunnel, getTunnelUrl } from './tunnelManager';
 
 const app = express();
@@ -62,9 +60,6 @@ app.post('/session/login', (req, res) => {
     if (session.hostSocket) {
       io.to(session.hostSocket).emit('client:connected', { clientId });
     }
-
-    // Iniciar transmissão de tela
-    startStreamer(io);
   }
 
   res.json({ sessionId: result.sessionId, approved: true });
@@ -104,7 +99,6 @@ io.on('connection', (socket) => {
     clientConnected(session, clientId);
     io.to(clientId).emit('client:approved');
     io.to(session.hostSocket).emit('client:connected', { clientId });
-    startStreamer(io);
   });
 
   socket.on('host:reject', ({ sessionId, clientId }: { sessionId: string; clientId: string }) => {
@@ -116,47 +110,30 @@ io.on('connection', (socket) => {
     io.to(clientId).emit('session:error', 'A solicitação foi rejeitada pelo host.');
   });
 
-  socket.on('disconnect', () => {
-    // If a client disconnects, we should ideally check if we can stop the streamer.
-    // We'll just listen to client:disconnect or rely on heartbeat in production.
-    // For now, let's stop streamer when ANY client disconnects (simplification).
-    stopStreamer();
+  socket.on('host:frame', ({ sessionId, frame }: { sessionId: string; frame: string }) => {
+    const session = getSession(sessionId);
+    if (!session || session.hostSocket !== socket.id) {
+      return;
+    }
+    // Retransmitir o frame para todos os clientes conectados
+    for (const clientId of session.connectedClients) {
+      io.to(clientId).emit('screen_frame', frame);
+    }
   });
 
-  socket.on('client:control', async ({ sessionId, action, payload }: { sessionId: string; action: string; payload: any }) => {
+  socket.on('disconnect', () => {
+    // A limpeza de sessões expiradas é feita pelo setInterval.
+    // Nenhuma ação adicional é necessária aqui.
+  });
+
+  socket.on('client:control', ({ sessionId, action, payload }: { sessionId: string; action: string; payload: any }) => {
     const session = getSession(sessionId);
     if (!session || !session.approvedClients.has(socket.id)) {
       return;
     }
-    try {
-      switch (action) {
-        case 'mouse':
-          await moveMouse(payload.deltaX, payload.deltaY);
-          break;
-        case 'move_absolute':
-          await moveMouseAbsolute(payload.x, payload.y);
-          break;
-        case 'mouse_down':
-          await mouseToggle('down', payload.button || 'left');
-          break;
-        case 'mouse_up':
-          await mouseToggle('up', payload.button || 'left');
-          break;
-        case 'click':
-          await click(payload.button || 'left');
-          break;
-        case 'scroll':
-          await scroll(payload.deltaX || payload.dx || payload.dy, payload.deltaY || payload.dy);
-          break;
-        case 'keyboard':
-          await typeKeyboard(payload);
-          break;
-        case 'type_string':
-          await typeString(payload.text);
-          break;
-      }
-    } catch (error) {
-      console.error('Controle remoto falhou', error);
+    // Repassar o evento de controle para o Host correspondente
+    if (session.hostSocket) {
+      io.to(session.hostSocket).emit('client:control', { action, payload });
     }
   });
 });
