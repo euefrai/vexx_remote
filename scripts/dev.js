@@ -7,11 +7,13 @@ try {
   if (process.platform === 'win32') {
     // Para processos nas portas 5173, 5174 e 4000
     execSync('powershell -Command "$pids = Get-NetTCPConnection -LocalPort 5173, 5174, 4000 -ErrorAction SilentlyContinue | Where-Object OwningProcess -ne 0 | Select-Object -ExpandProperty OwningProcess | Unique; if ($pids) { Stop-Process -Id $pids -Force -ErrorAction SilentlyContinue }"');
-    // Para instâncias órfãs do cloudflared
+    // Para instâncias órfãs do cloudflared e ngrok
     execSync('powershell -Command "Stop-Process -Name cloudflared -Force -ErrorAction SilentlyContinue"');
+    execSync('powershell -Command "Stop-Process -Name ngrok -Force -ErrorAction SilentlyContinue"');
   } else {
     execSync('npx kill-port 5173 5174 4000 >/dev/null 2>&1 || true');
     execSync('killall cloudflared >/dev/null 2>&1 || true');
+    execSync('killall ngrok >/dev/null 2>&1 || true');
   }
   console.log('Portas e processos antigos limpos.');
 } catch (e) {
