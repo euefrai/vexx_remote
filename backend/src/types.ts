@@ -6,6 +6,7 @@ export type JoinRequest = {
 export type Session = {
   sessionId: string;
   hostSocket?: string;
+  agentSocket?: string;
   createdAt: number;
   lastHeartbeat: number;
   pendingRequests: JoinRequest[];

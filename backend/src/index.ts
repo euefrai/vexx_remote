@@ -110,9 +110,19 @@ io.on('connection', (socket) => {
     io.to(clientId).emit('session:error', 'A solicitação foi rejeitada pelo host.');
   });
 
-  socket.on('host:frame', ({ sessionId, frame }: { sessionId: string; frame: string }) => {
+  socket.on('agent:join', ({ sessionId }: { sessionId: string }) => {
+    console.log(`Agent ${socket.id} joining session ${sessionId}`);
     const session = getSession(sessionId);
-    if (!session || session.hostSocket !== socket.id) {
+    if (!session) {
+      socket.emit('session:error', 'Código de sessão inválido ou expirado.');
+      return;
+    }
+    session.agentSocket = socket.id;
+  });
+
+  socket.on('agent:frame', ({ sessionId, frame }: { sessionId: string; frame: string }) => {
+    const session = getSession(sessionId);
+    if (!session || session.agentSocket !== socket.id) {
       return;
     }
     // Retransmitir o frame para todos os clientes conectados
@@ -131,9 +141,9 @@ io.on('connection', (socket) => {
     if (!session || !session.approvedClients.has(socket.id)) {
       return;
     }
-    // Repassar o evento de controle para o Host correspondente
-    if (session.hostSocket) {
-      io.to(session.hostSocket).emit('client:control', { action, payload });
+    // Repassar o evento de controle para o Agente correspondente
+    if (session.agentSocket) {
+      io.to(session.agentSocket).emit('client:control', { action, payload });
     }
   });
 });

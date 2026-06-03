@@ -25,8 +25,6 @@ export default function HostPage() {
 
   const [agentOnline, setAgentOnline] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
-  const captureStreamRef = useRef<MediaStream | null>(null);
-  const captureIntervalRef = useRef<number | null>(null);
 
   const localSessionRef = useRef(localSession);
 
@@ -37,30 +35,41 @@ export default function HostPage() {
   const [publicUrl, setPublicUrl] = useState('');
   const [tunnelLoading, setTunnelLoading] = useState(true);
 
-  // Monitorar se o VexxAgent local está ativo
+  // Monitorar se o VexxAgent local está ativo e se está transmitindo
   useEffect(() => {
     const checkAgent = async () => {
       try {
         const res = await fetch('http://127.0.0.1:5050/status');
         const data = await res.json();
         setAgentOnline(data.status === 'active');
+        setIsCapturing(!!data.isStreaming);
       } catch (e) {
         setAgentOnline(false);
+        setIsCapturing(false);
       }
     };
     checkAgent();
-    const interval = window.setInterval(checkAgent, 2500);
+    const interval = window.setInterval(checkAgent, 2000);
     return () => clearInterval(interval);
   }, []);
 
-  // Limpeza de captura ao desmontar a página
+  // Buscar a URL pública do túnel
   useEffect(() => {
-    return () => {
-      if (captureIntervalRef.current) clearInterval(captureIntervalRef.current);
-      if (captureStreamRef.current) {
-        captureStreamRef.current.getTracks().forEach((t) => t.stop());
-      }
+    let interval: number;
+    const fetchTunnel = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/tunnel`);
+        const data = await res.json();
+        if (data.url) {
+          setPublicUrl(data.url);
+          setTunnelLoading(false);
+          clearInterval(interval);
+        }
+      } catch (e) {}
     };
+    fetchTunnel();
+    interval = window.setInterval(fetchTunnel, 2000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -78,19 +87,6 @@ export default function HostPage() {
       setClientsConnected((count) => count + 1);
       setRequests((prev) => prev.filter((item) => item.clientId !== clientId));
       setStatus('Cliente conectado e autorizado');
-    });
-
-    // Escutar eventos de controle do cliente e repassar para o agente local
-    socket.on('client:control', async ({ action, payload }: { action: string; payload: any }) => {
-      try {
-        await fetch('http://127.0.0.1:5050/control', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action, payload })
-        });
-      } catch (e) {
-        console.warn('Falha ao repassar comando para o agente local:', e);
-      }
     });
 
     socket.connect();
@@ -126,62 +122,41 @@ export default function HostPage() {
   }
 
   async function startScreenCapture() {
-    if (isCapturing) return;
-
+    if (!localSession) return;
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: 15, width: 1280, height: 720 },
-        audio: false
+      setStatus('Iniciando transmissão no agente local...');
+      const resolvedApiBase = API_BASE ? API_BASE : window.location.origin;
+
+      const response = await fetch('http://127.0.0.1:5050/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: localSession,
+          signalingUrl: resolvedApiBase
+        })
       });
 
-      captureStreamRef.current = stream;
+      const result = await response.json();
+      if (!response.ok || result.error) {
+        throw new Error(result.error || 'Falha ao iniciar no agente');
+      }
+
       setIsCapturing(true);
-
-      const video = document.createElement('video');
-      video.srcObject = stream;
-      video.muted = true;
-      video.playsInline = true;
-      await video.play();
-
-      const canvas = document.createElement('canvas');
-      canvas.width = 1280;
-      canvas.height = 720;
-      const ctx = canvas.getContext('2d');
-
-      const sendFrame = () => {
-        if (!ctx || video.paused || video.ended) return;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
-        const base64 = dataUrl.split(',')[1];
-        if (base64 && localSessionRef.current) {
-          socket.emit('host:frame', { sessionId: localSessionRef.current, frame: base64 });
-        }
-      };
-
-      const intervalId = window.setInterval(sendFrame, 66);
-      captureIntervalRef.current = intervalId;
-
-      stream.getVideoTracks()[0].onended = () => {
-        stopScreenCapture();
-      };
-      
-      setStatus('Transmitindo tela...');
-    } catch (err) {
-      console.error('Erro ao iniciar captura de tela:', err);
+      setStatus('Transmitindo tela via Vexx Agent...');
+    } catch (err: any) {
+      console.error('Erro ao iniciar transmissão do agente:', err);
+      setStatus(`Erro: ${err.message}`);
       setIsCapturing(false);
     }
   }
 
-  function stopScreenCapture() {
+  async function stopScreenCapture() {
+    try {
+      await fetch('http://127.0.0.1:5050/stop', { method: 'POST' });
+    } catch (e) {
+      console.warn('Falha ao sinalizar parada para o agente:', e);
+    }
     setIsCapturing(false);
-    if (captureIntervalRef.current) {
-      clearInterval(captureIntervalRef.current);
-      captureIntervalRef.current = null;
-    }
-    if (captureStreamRef.current) {
-      captureStreamRef.current.getTracks().forEach((track) => track.stop());
-      captureStreamRef.current = null;
-    }
     setStatus('Sessão ativa, transmissão parada');
   }
 
