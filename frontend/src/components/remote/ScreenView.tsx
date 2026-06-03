@@ -1,58 +1,23 @@
-import { forwardRef, useEffect, useRef, useState } from "react";
-import { getSocket } from "../../services/socketService";
+import { forwardRef, useEffect, useRef } from "react";
 
 interface Props {
   /** Live MediaStream from a WebRTC connection — takes precedence over imgUrl. */
   stream?:    MediaStream | null;
   connected:  boolean;
-  onFrameReceived?: () => void;
+  isTransmitting?: boolean;
 }
 
 /**
  * Renders the desktop frame. Picks the right element based on the source:
  *
  *     stream  → <video> (WebRTC)
- *     socket  → <img>   (JPEG over WS / MJPEG updated directly via DOM Ref)
- *
- * The forwarded ref always points at the rendered media element so
- * TouchController can read its bounding rect. Letterbox is browser-
- * managed via `object-contain`.
+ *     socket  → <img>   (JPEG over WS / MJPEG updated directly via DOM Ref in parent)
  */
 export const ScreenView = forwardRef<HTMLElement, Props>(function ScreenView(
-  { stream, connected, onFrameReceived },
+  { stream, connected, isTransmitting },
   ref,
 ) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const imgRef = useRef<HTMLImageElement | null>(null);
-  const [hasFrame, setHasFrame] = useState(false);
-
-  useEffect(() => {
-    if (stream) return;
-
-    const socket = getSocket();
-    const handleFrame = (base64Frame: string) => {
-      if (imgRef.current) {
-        imgRef.current.src = `data:image/jpeg;base64,${base64Frame}`;
-        if (!hasFrame) {
-          setHasFrame(true);
-          if (onFrameReceived) {
-            onFrameReceived();
-          }
-        }
-      }
-    };
-
-    socket.on('screen_frame', handleFrame);
-    return () => {
-      socket.off('screen_frame', handleFrame);
-    };
-  }, [stream, hasFrame, onFrameReceived]);
-
-  useEffect(() => {
-    if (!connected) {
-      setHasFrame(false);
-    }
-  }, [connected]);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -72,7 +37,6 @@ export const ScreenView = forwardRef<HTMLElement, Props>(function ScreenView(
     else if (ref) (ref as React.MutableRefObject<HTMLElement | null>).current = el;
   };
   const setImgRef = (el: HTMLImageElement | null) => {
-    imgRef.current = el;
     if (typeof ref === "function") ref(el);
     else if (ref) (ref as React.MutableRefObject<HTMLElement | null>).current = el;
   };
@@ -91,7 +55,7 @@ export const ScreenView = forwardRef<HTMLElement, Props>(function ScreenView(
 
   return (
     <div className="relative h-full w-full flex items-center justify-center">
-      {!hasFrame && (
+      {!isTransmitting && (
         <div className="flex h-full w-full items-center justify-center text-sm text-text-secondary">
           {connected ? "Aguardando primeiro frame..." : "Conectando..."}
         </div>
@@ -100,7 +64,7 @@ export const ScreenView = forwardRef<HTMLElement, Props>(function ScreenView(
         ref={setImgRef}
         alt="desktop"
         draggable={false}
-        style={{ display: hasFrame ? 'block' : 'none' }}
+        style={{ display: isTransmitting ? 'block' : 'none' }}
         className="h-full w-full select-none object-contain"
       />
     </div>

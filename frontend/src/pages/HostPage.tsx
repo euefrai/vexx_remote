@@ -61,8 +61,9 @@ export default function HostPage() {
       setStatus('Nova solicitação de controle');
     });
 
-    socket.on('client:connected', () => {
+    socket.on('client:connected', ({ clientId }: { clientId: string }) => {
       setClientsConnected((count) => count + 1);
+      setRequests((prev) => prev.filter((item) => item.clientId !== clientId));
       setStatus('Cliente conectado e autorizado');
     });
 

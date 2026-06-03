@@ -11,11 +11,13 @@ export default function ClientPage() {
   const [searchParams] = useSearchParams();
   const defaultCode = searchParams.get('code') ?? '';
   const { setSessionId, setRole } = useSessionStore();
-  
+  const socket = useMemo(() => getSocket(), []);
+  const mediaRef = useRef<HTMLElement>(null);
+
   const [sessionCode, setSessionCode] = useState(defaultCode);
   const [status, setStatus] = useState('Pronto para conectar');
   const [approved, setApproved] = useState(false);
-  const [connected, setConnected] = useState(false);
+  const [connected, setConnected] = useState(socket.connected);
   const [isTransmitting, setIsTransmitting] = useState(false);
 
   const [accessMethod, setAccessMethod] = useState<'code' | 'credentials'>('code');
@@ -26,9 +28,6 @@ export default function ClientPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [screen, setScreen] = useState({ w: 1920, h: 1080 });
-  
-  const socket = useMemo(() => getSocket(), []);
-  const mediaRef = useRef<HTMLElement>(null);
   
   const approvedRef = useRef(approved);
   const sessionCodeRef = useRef(sessionCode);
@@ -55,6 +54,14 @@ export default function ClientPage() {
 
     socket.on('session:error', (msg: string) => {
       setStatus(`Erro: ${msg}`);
+    });
+
+    socket.on('screen_frame', (base64Frame: string) => {
+      const img = mediaRef.current as HTMLImageElement | null;
+      if (img) {
+        img.src = `data:image/jpeg;base64,${base64Frame}`;
+        setIsTransmitting(true);
+      }
     });
 
     socket.connect();
@@ -265,7 +272,7 @@ export default function ClientPage() {
         <ScreenView
           ref={mediaRef}
           connected={connected}
-          onFrameReceived={() => setIsTransmitting(true)}
+          isTransmitting={isTransmitting}
         />
         <TouchController
           imgRef={mediaRef as React.RefObject<HTMLImageElement | null>}
