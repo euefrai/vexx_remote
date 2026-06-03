@@ -1,0 +1,28 @@
+{
+  "name": "vexx-remote-backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "node ../node_modules/ts-node-dev/lib/bin.js --respawn --transpile-only src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@nut-tree-fork/nut-js": "^4.2.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.3",
+    "express": "^4.19.4",
+    "helmet": "^7.0.1",
+    "jpeg-js": "^0.4.4",
+    "socket.io": "^4.7.2"
+  },
+  "optionalDependencies": {
+    "robotjs": "^0.6.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.17",
+    "@types/node": "^20.14.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.5.0"
+  }
+}

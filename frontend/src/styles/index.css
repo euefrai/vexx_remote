@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  
+  --color-background-primary: #1e1e1e;
+  --color-background-secondary: #252526;
+  --color-background-tertiary: #121212;
+  --color-background-info: #185FA5;
+  --color-background-success: #3B6D11;
+  --color-background-warning: #854F0B;
+  --color-background-danger: #A32D2D;
+
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #a3a3a3;
+  --color-text-tertiary: #737373;
+  --color-text-info: #85B7EB;
+  --color-text-success: #97C459;
+  --color-text-warning: #EF9F27;
+  --color-text-danger: #F09595;
+
+  --color-border-tertiary: rgba(255, 255, 255, 0.15);
+  --color-border-secondary: rgba(255, 255, 255, 0.3);
+  --color-border-primary: rgba(255, 255, 255, 0.4);
+  --color-border-info: #378ADD;
+  --color-border-success: #639922;
+  --color-border-warning: #BA7517;
+  --color-border-danger: #E24B4A;
+
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+  --border-radius-xl: 16px;
+
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+html, body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-background-tertiary);
+  color: var(--color-text-primary);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button, input, textarea {
+  font: inherit;
+}
+
+::selection {
+  background: var(--color-background-info);
+  color: #fff;
+}
