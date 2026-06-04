@@ -3,6 +3,7 @@ import cors from 'cors';
 import { io as socketClient, Socket } from 'socket.io-client';
 import { Monitor } from 'node-screenshots';
 import jpeg from 'jpeg-js';
+import { mouse } from '@nut-tree-fork/nut-js';
 import { moveMouse, moveMouseAbsolute, mouseToggle, click, scroll, typeKeyboard, typeString } from './robotControl';
 
 const app = express();
@@ -123,6 +124,57 @@ function startSocketConnection(primaryUrl: string, sessionId: string) {
   attempt(primaryUrl);
 }
 
+function drawCursor(buffer: Buffer, width: number, height: number, x: number, y: number) {
+  const mask = [
+    "X           ",
+    "XX          ",
+    "X.X         ",
+    "X..X        ",
+    "X...X       ",
+    "X....X      ",
+    "X.....X     ",
+    "X......X    ",
+    "X.......X   ",
+    "X........X  ",
+    "X...XXXXX   ",
+    "X..X.X      ",
+    "X.X  X.X    ",
+    "XX    X.X   ",
+    "X      X.X  ",
+    "        X.X ",
+    "         X  "
+  ];
+
+  for (let row = 0; row < mask.length; row++) {
+    const py = y + row;
+    if (py < 0 || py >= height) continue;
+
+    const rowStr = mask[row];
+    const rowOffset = py * width * 4;
+
+    for (let col = 0; col < rowStr.length; col++) {
+      const px = x + col;
+      if (px < 0 || px >= width) continue;
+
+      const char = rowStr[col];
+      if (char === ' ') continue;
+
+      const idx = rowOffset + px * 4;
+      if (char === 'X') {
+        buffer[idx] = 0;     // R
+        buffer[idx + 1] = 0; // G
+        buffer[idx + 2] = 0; // B
+        buffer[idx + 3] = 255;
+      } else if (char === '.') {
+        buffer[idx] = 255;   // R
+        buffer[idx + 1] = 255; // G
+        buffer[idx + 2] = 255; // B
+        buffer[idx + 3] = 255;
+      }
+    }
+  }
+}
+
 function resizeRGBA(src: Buffer, srcW: number, srcH: number, destW: number, destH: number): Buffer {
   const dest = Buffer.alloc(destW * destH * 4);
   const xRatio = srcW / destW;
@@ -165,10 +217,25 @@ function startCaptureLoop(sessionId: string) {
 
     const startTime = Date.now();
     try {
+      let mousePos = null;
+      try {
+        mousePos = await mouse.getPosition();
+      } catch (e) {
+        // Safe to ignore
+      }
+
       const img = monitor.captureImageSync();
       const rawBuffer = img.toRawSync();
       const w = img.width;
       const h = img.height;
+
+      if (mousePos) {
+        const scaleX = w / monitor.width();
+        const scaleY = h / monitor.height();
+        const cx = Math.round((mousePos.x - monitor.x()) * scaleX);
+        const cy = Math.round((mousePos.y - monitor.y()) * scaleY);
+        drawCursor(rawBuffer, w, h, cx, cy);
+      }
 
       const targetW = Math.min(w, 1024);
       const targetH = Math.round((targetW / w) * h);

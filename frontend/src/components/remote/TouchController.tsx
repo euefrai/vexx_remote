@@ -22,8 +22,12 @@ export function TouchController({ imgRef, screenW, screenH, onInput }: Props) {
   const pointersRef = useRef<
     Map<number, { lx: number; ly: number; sx: number; sy: number; t0: number; maxDist: number }>
   >(new Map());
-  const draggingRef = useRef(false);
   const clickTimerRef = useRef<number | null>(null);
+
+  // References to track trackpad double-tap-and-drag and double-click gestures
+  const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(null);
+  const isDoubleTapRef = useRef(false);
+  const isDragActiveRef = useRef(false);
 
   useEffect(() => {
     const overlay = overlayRef.current;
@@ -36,12 +40,25 @@ export function TouchController({ imgRef, screenW, screenH, onInput }: Props) {
       e.preventDefault();
       try { overlay.setPointerCapture(e.pointerId); } catch {}
       
+      const now = performance.now();
+      const lastTap = lastTapRef.current;
+      
+      let isDoubleTap = false;
+      if (lastTap && (now - lastTap.time) < 300) {
+        const dist = Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y);
+        if (dist < 35) {
+          isDoubleTap = true;
+        }
+      }
+
       pointersRef.current.set(e.pointerId, {
         lx: e.clientX, ly: e.clientY,
         sx: e.clientX, sy: e.clientY,
-        t0: performance.now(),
+        t0: now,
         maxDist: 0,
       });
+
+      isDoubleTapRef.current = isDoubleTap;
 
       if (clickTimerRef.current) {
         window.clearTimeout(clickTimerRef.current);
@@ -64,15 +81,13 @@ export function TouchController({ imgRef, screenW, screenH, onInput }: Props) {
       const numPointers = pointersRef.current.size;
 
       if (numPointers === 1) {
-        // Drag detection for Left Click hold (must hold still for 400ms)
-        const dt = performance.now() - pt.t0;
-
-        if (!draggingRef.current && dt > 400 && pt.maxDist < 10) {
-          draggingRef.current = true;
+        // Double-tap-and-drag gesture detection (macOS/Windows laptop trackpad style)
+        if (isDoubleTapRef.current && !isDragActiveRef.current && distFromStart > 5) {
+          isDragActiveRef.current = true;
           onInput({ type: "down", button: "left" });
-          // Optional: Could trigger vibration here: navigator.vibrate?.(50)
         }
 
+        // Relative mouse pointer movement
         if (dx !== 0 || dy !== 0) {
           onInput({ type: "move", deltaX: dx * SENSITIVITY_MOUSE, deltaY: dy * SENSITIVITY_MOUSE });
         }
@@ -92,28 +107,50 @@ export function TouchController({ imgRef, screenW, screenH, onInput }: Props) {
 
       if (!pt) return;
 
-      if (draggingRef.current && pointersRef.current.size === 0) {
-        draggingRef.current = false;
+      const now = performance.now();
+
+      if (isDragActiveRef.current) {
+        // End of double-tap-to-drag session
+        isDragActiveRef.current = false;
+        isDoubleTapRef.current = false;
         onInput({ type: "up", button: "left" });
+        lastTapRef.current = null; // Clear tap memory
         return;
       }
 
-      const dt = performance.now() - pt.t0;
-      const dist = Math.hypot(e.clientX - pt.sx, e.clientY - pt.sy);
+      const dt = now - pt.t0;
+      const moved = pt.maxDist > 15;
 
-      // Tap detection (quick, very little movement during the whole touch)
-      if (dt < 250 && pt.maxDist < 15) {
+      if (dt < 250 && !moved) {
         if (numPointers === 1 && pointersRef.current.size === 0) {
-          // Wait briefly in case it's a double tap or multi-finger tap sequence
-          clickTimerRef.current = window.setTimeout(() => {
+          if (isDoubleTapRef.current) {
+            // It was a quick double-tap without drag -> Double Click!
+            isDoubleTapRef.current = false;
             onInput({ type: "click", button: "left" });
-          }, 50);
+            setTimeout(() => {
+              onInput({ type: "click", button: "left" });
+            }, 30);
+            lastTapRef.current = null;
+          } else {
+            // Store last tap info and set a timer for single click (in case it is followed by another tap)
+            lastTapRef.current = { time: now, x: e.clientX, y: e.clientY };
+            clickTimerRef.current = window.setTimeout(() => {
+              onInput({ type: "click", button: "left" });
+            }, 250);
+          }
         } else if (numPointers === 2) {
-          // 2-finger tap -> Right Click
+          // 2-finger tap -> Right Click!
           onInput({ type: "click", button: "right" });
+          lastTapRef.current = null;
         } else if (numPointers === 3) {
-          // 3-finger tap -> Middle Click
+          // 3-finger tap -> Middle Click!
           onInput({ type: "click", button: "middle" });
+          lastTapRef.current = null;
+        }
+      } else {
+        // If movement happened or it was a slow touch, save it to allow slow double-taps
+        if (numPointers === 1 && pointersRef.current.size === 0) {
+          lastTapRef.current = { time: now, x: e.clientX, y: e.clientY };
         }
       }
     };
