@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { io as socketClient, Socket } from 'socket.io-client';
 import { Monitor } from 'node-screenshots';
+import jpeg from 'jpeg-js';
 import { moveMouse, moveMouseAbsolute, mouseToggle, click, scroll, typeKeyboard, typeString } from './robotControl';
 
 const app = express();
@@ -12,7 +13,7 @@ app.use(express.json());
 
 let socket: Socket | null = null;
 let isStreaming = false;
-let captureInterval: NodeJS.Timeout | null = null;
+let captureTimeout: NodeJS.Timeout | null = null;
 
 app.get('/status', (req, res) => {
   res.json({ status: 'active', isStreaming, platform: process.platform });
@@ -89,10 +90,31 @@ app.post('/stop', (req, res) => {
   res.json({ success: true });
 });
 
+function resizeRGBA(src: Buffer, srcW: number, srcH: number, destW: number, destH: number): Buffer {
+  const dest = Buffer.alloc(destW * destH * 4);
+  const xRatio = srcW / destW;
+  const yRatio = srcH / destH;
+  for (let y = 0; y < destH; y++) {
+    const srcY = Math.floor(y * yRatio);
+    const srcRowOffset = srcY * srcW * 4;
+    const destRowOffset = y * destW * 4;
+    for (let x = 0; x < destW; x++) {
+      const srcX = Math.floor(x * xRatio);
+      const srcIdx = srcRowOffset + srcX * 4;
+      const destIdx = destRowOffset + x * 4;
+      dest[destIdx] = src[srcIdx];         // R
+      dest[destIdx + 1] = src[srcIdx + 1]; // G
+      dest[destIdx + 2] = src[srcIdx + 2]; // B
+      dest[destIdx + 3] = src[srcIdx + 3]; // A
+    }
+  }
+  return dest;
+}
+
 function startCaptureLoop(sessionId: string) {
   if (isStreaming) return;
   isStreaming = true;
-  console.log('[Agent] Starting capture loop using node-screenshots...');
+  console.log('[Agent] Starting capture loop using node-screenshots and jpeg-js...');
 
   let monitor: any = null;
   try {
@@ -103,25 +125,51 @@ function startCaptureLoop(sessionId: string) {
     return;
   }
 
-  captureInterval = setInterval(() => {
-    if (!socket || !socket.connected || !isStreaming) return;
+  async function captureFrame() {
+    if (!isStreaming || !socket || !socket.connected) {
+      return;
+    }
 
+    const startTime = Date.now();
     try {
       const img = monitor.captureImageSync();
-      const buffer = img.toJpegSync();
-      const base64Frame = buffer.toString('base64');
+      const rawBuffer = img.toRawSync();
+      const w = img.width;
+      const h = img.height;
+
+      const targetW = Math.min(w, 1024);
+      const targetH = Math.round((targetW / w) * h);
+
+      const resizedBuffer = resizeRGBA(rawBuffer, w, h, targetW, targetH);
+
+      const jpegImageData = {
+        data: resizedBuffer,
+        width: targetW,
+        height: targetH
+      };
+
+      const jpegRaw = jpeg.encode(jpegImageData, 55); // Quality 55
+      const base64Frame = jpegRaw.data.toString('base64');
       socket.emit('agent:frame', { sessionId, frame: base64Frame });
     } catch (err) {
-      console.error('[Agent] Screen capture failed:', err);
+      console.error('[Agent] Screen capture/processing failed:', err);
     }
-  }, 66); // ~15 FPS
+
+    if (isStreaming) {
+      const elapsed = Date.now() - startTime;
+      const delay = Math.max(10, 66 - elapsed);
+      captureTimeout = setTimeout(captureFrame, delay);
+    }
+  }
+
+  captureFrame();
 }
 
 function stopAgentSession() {
   isStreaming = false;
-  if (captureInterval) {
-    clearInterval(captureInterval);
-    captureInterval = null;
+  if (captureTimeout) {
+    clearTimeout(captureTimeout);
+    captureTimeout = null;
   }
   if (socket) {
     socket.disconnect();

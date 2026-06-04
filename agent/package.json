@@ -8,7 +8,8 @@
       "node18-win-x64"
     ],
     "assets": [
-      "../node_modules/@nut-tree-fork/**/*.node"
+      "../node_modules/@nut-tree-fork/**/*.node",
+      "../node_modules/node-screenshots-win32-x64-msvc/**/*.node"
     ]
   },
   "scripts": {
@@ -19,6 +20,7 @@
     "@nut-tree-fork/nut-js": "^4.2.6",
     "cors": "^2.8.5",
     "express": "^4.19.4",
+    "jpeg-js": "^0.4.4",
     "node-screenshots": "^0.2.8",
     "socket.io-client": "^4.8.3"
   },
