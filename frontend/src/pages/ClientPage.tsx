@@ -19,6 +19,7 @@ export default function ClientPage() {
   const [approved, setApproved] = useState(false);
   const [connected, setConnected] = useState(socket.connected);
   const [isTransmitting, setIsTransmitting] = useState(false);
+  const [mousePos, setMousePos] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
 
   const [accessMethod, setAccessMethod] = useState<'code' | 'credentials'>('code');
   const [clientCustomName, setClientCustomName] = useState('');
@@ -56,7 +57,20 @@ export default function ClientPage() {
       setStatus(`Erro: ${msg}`);
     });
 
-    socket.on('screen_frame', (base64Frame: string) => {
+    socket.on('screen_frame', (data: any) => {
+      let base64Frame = '';
+      if (typeof data === 'string') {
+        base64Frame = data;
+      } else {
+        base64Frame = data.frame;
+        setMousePos({
+          x: data.mouseX,
+          y: data.mouseY,
+          w: data.monitorWidth,
+          h: data.monitorHeight
+        });
+      }
+
       const img = mediaRef.current as HTMLImageElement | null;
       if (img) {
         img.src = `data:image/jpeg;base64,${base64Frame}`;
@@ -273,6 +287,7 @@ export default function ClientPage() {
           ref={mediaRef}
           connected={connected}
           isTransmitting={isTransmitting}
+          mousePos={mousePos}
         />
         <TouchController
           imgRef={mediaRef as React.RefObject<HTMLImageElement | null>}

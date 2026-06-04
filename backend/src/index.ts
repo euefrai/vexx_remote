@@ -120,14 +120,14 @@ io.on('connection', (socket) => {
     session.agentSocket = socket.id;
   });
 
-  socket.on('agent:frame', ({ sessionId, frame }: { sessionId: string; frame: string }) => {
-    const session = getSession(sessionId);
+  socket.on('agent:frame', (payload: any) => {
+    const session = getSession(payload.sessionId);
     if (!session || session.agentSocket !== socket.id) {
       return;
     }
-    // Retransmitir o frame para todos os clientes conectados
+    // Retransmitir o payload para todos os clientes conectados
     for (const clientId of session.connectedClients) {
-      io.to(clientId).emit('screen_frame', frame);
+      io.to(clientId).emit('screen_frame', payload);
     }
   });
 

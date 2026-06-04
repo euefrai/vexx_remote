@@ -2,7 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import { io as socketClient, Socket } from 'socket.io-client';
 import { Monitor } from 'node-screenshots';
-import jpeg from 'jpeg-js';
 import { mouse } from '@nut-tree-fork/nut-js';
 import { moveMouse, moveMouseAbsolute, mouseToggle, click, scroll, typeKeyboard, typeString } from './robotControl';
 
@@ -124,82 +123,10 @@ function startSocketConnection(primaryUrl: string, sessionId: string) {
   attempt(primaryUrl);
 }
 
-function drawCursor(buffer: Buffer, width: number, height: number, x: number, y: number) {
-  const mask = [
-    "X           ",
-    "XX          ",
-    "X.X         ",
-    "X..X        ",
-    "X...X       ",
-    "X....X      ",
-    "X.....X     ",
-    "X......X    ",
-    "X.......X   ",
-    "X........X  ",
-    "X...XXXXX   ",
-    "X..X.X      ",
-    "X.X  X.X    ",
-    "XX    X.X   ",
-    "X      X.X  ",
-    "        X.X ",
-    "         X  "
-  ];
-
-  for (let row = 0; row < mask.length; row++) {
-    const py = y + row;
-    if (py < 0 || py >= height) continue;
-
-    const rowStr = mask[row];
-    const rowOffset = py * width * 4;
-
-    for (let col = 0; col < rowStr.length; col++) {
-      const px = x + col;
-      if (px < 0 || px >= width) continue;
-
-      const char = rowStr[col];
-      if (char === ' ') continue;
-
-      const idx = rowOffset + px * 4;
-      if (char === 'X') {
-        buffer[idx] = 0;     // R
-        buffer[idx + 1] = 0; // G
-        buffer[idx + 2] = 0; // B
-        buffer[idx + 3] = 255;
-      } else if (char === '.') {
-        buffer[idx] = 255;   // R
-        buffer[idx + 1] = 255; // G
-        buffer[idx + 2] = 255; // B
-        buffer[idx + 3] = 255;
-      }
-    }
-  }
-}
-
-function resizeRGBA(src: Buffer, srcW: number, srcH: number, destW: number, destH: number): Buffer {
-  const dest = Buffer.alloc(destW * destH * 4);
-  const xRatio = srcW / destW;
-  const yRatio = srcH / destH;
-  for (let y = 0; y < destH; y++) {
-    const srcY = Math.floor(y * yRatio);
-    const srcRowOffset = srcY * srcW * 4;
-    const destRowOffset = y * destW * 4;
-    for (let x = 0; x < destW; x++) {
-      const srcX = Math.floor(x * xRatio);
-      const srcIdx = srcRowOffset + srcX * 4;
-      const destIdx = destRowOffset + x * 4;
-      dest[destIdx] = src[srcIdx];         // R
-      dest[destIdx + 1] = src[srcIdx + 1]; // G
-      dest[destIdx + 2] = src[srcIdx + 2]; // B
-      dest[destIdx + 3] = src[srcIdx + 3]; // A
-    }
-  }
-  return dest;
-}
-
 function startCaptureLoop(sessionId: string) {
   if (isStreaming) return;
   isStreaming = true;
-  console.log('[Agent] Starting capture loop using node-screenshots and jpeg-js...');
+  console.log('[Agent] Starting capture loop using node-screenshots native JPEG encoder...');
 
   let monitor: any = null;
   try {
@@ -217,47 +144,30 @@ function startCaptureLoop(sessionId: string) {
 
     const startTime = Date.now();
     try {
-      let mousePos = null;
+      let mouseX = 0;
+      let mouseY = 0;
       try {
-        mousePos = await mouse.getPosition();
+        const mousePos = await mouse.getPosition();
+        mouseX = mousePos.x - monitor.x();
+        mouseY = mousePos.y - monitor.y();
       } catch (e) {
-        // Safe to ignore
+        // Ignore
       }
 
       const img = monitor.captureImageSync();
-      const rawBuffer = img.toRawSync();
-      const w = img.width;
-      const h = img.height;
+      const jpegBuffer = img.toJpegSync();
+      const base64Frame = jpegBuffer.toString('base64');
 
-      if (mousePos) {
-        const scaleX = w / monitor.width();
-        const scaleY = h / monitor.height();
-        const cx = Math.round((mousePos.x - monitor.x()) * scaleX);
-        const cy = Math.round((mousePos.y - monitor.y()) * scaleY);
-        drawCursor(rawBuffer, w, h, cx, cy);
-      }
-
-      let resizedBuffer = rawBuffer;
-      let targetW = w;
-      let targetH = h;
-
-      if (w > 1440) {
-        targetW = 1440;
-        targetH = Math.round((targetW / w) * h);
-        resizedBuffer = resizeRGBA(rawBuffer, w, h, targetW, targetH);
-      }
-
-      const jpegImageData = {
-        data: resizedBuffer,
-        width: targetW,
-        height: targetH
-      };
-
-      const jpegRaw = jpeg.encode(jpegImageData, 75); // Quality 75
-      const base64Frame = jpegRaw.data.toString('base64');
-      socket.emit('agent:frame', { sessionId, frame: base64Frame });
+      socket.emit('agent:frame', {
+        sessionId,
+        frame: base64Frame,
+        mouseX,
+        mouseY,
+        monitorWidth: monitor.width(),
+        monitorHeight: monitor.height()
+      });
     } catch (err) {
-      console.error('[Agent] Screen capture/processing failed:', err);
+      console.error('[Agent] Screen capture failed:', err);
     }
 
     if (isStreaming) {
