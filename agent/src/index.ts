@@ -28,19 +28,63 @@ app.post('/start', (req, res) => {
   stopAgentSession();
 
   try {
-    console.log(`[Agent] Connecting to signaling server: ${signalingUrl}...`);
-    socket = socketClient(signalingUrl, {
-      transports: ['websocket'],
-      autoConnect: true
+    startSocketConnection(signalingUrl, sessionId);
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('[Agent] Failed to start:', error);
+    res.status(500).json({ error: error.message || 'Failed to connect' });
+  }
+});
+
+app.post('/stop', (req, res) => {
+  stopAgentSession();
+  res.json({ success: true });
+});
+
+function startSocketConnection(primaryUrl: string, sessionId: string) {
+  let attemptedFallback = false;
+
+  function attempt(url: string) {
+    console.log(`[Agent] Attempting to connect to signaling server at: ${url}...`);
+
+    const client = socketClient(url, {
+      transports: ['polling', 'websocket'],
+      extraHeaders: {
+        'ngrok-skip-browser-warning': 'true',
+        'User-Agent': 'VexxAgent'
+      },
+      autoConnect: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      timeout: 8000
     });
 
-    socket.on('connect', () => {
-      console.log(`[Agent] Socket connected, joining session ${sessionId}...`);
-      socket?.emit('agent:join', { sessionId });
+    client.on('connect', () => {
+      console.log(`[Agent] Socket connected successfully to ${url}! Joining session ${sessionId}...`);
+      socket = client;
+      socket.emit('agent:join', { sessionId });
       startCaptureLoop(sessionId);
     });
 
-    socket.on('client:control', async ({ action, payload }: { action: string; payload: any }) => {
+    client.on('connect_error', (err) => {
+      console.error(`[Agent] Connection error for ${url}:`, err.message);
+
+      if (!attemptedFallback && url !== 'http://127.0.0.1:4000') {
+        attemptedFallback = true;
+        console.log(`[Agent] Primary URL connection failed. Falling back to local signaling server (http://127.0.0.1:4000)...`);
+        client.disconnect();
+        attempt('http://127.0.0.1:4000');
+      }
+    });
+
+    client.on('disconnect', (reason) => {
+      console.log(`[Agent] Socket disconnected from ${url}. Reason: ${reason}`);
+      if (socket === client) {
+        stopAgentSession();
+      }
+    });
+
+    client.on('client:control', async ({ action, payload }: { action: string; payload: any }) => {
       try {
         switch (action) {
           case 'mouse':
@@ -73,22 +117,11 @@ app.post('/start', (req, res) => {
       }
     });
 
-    socket.on('disconnect', () => {
-      console.log('[Agent] Socket disconnected');
-      stopAgentSession();
-    });
-
-    res.json({ success: true });
-  } catch (error: any) {
-    console.error('[Agent] Failed to start:', error);
-    res.status(500).json({ error: error.message || 'Failed to connect' });
+    socket = client;
   }
-});
 
-app.post('/stop', (req, res) => {
-  stopAgentSession();
-  res.json({ success: true });
-});
+  attempt(primaryUrl);
+}
 
 function resizeRGBA(src: Buffer, srcW: number, srcH: number, destW: number, destH: number): Buffer {
   const dest = Buffer.alloc(destW * destH * 4);
