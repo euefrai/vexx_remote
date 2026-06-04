@@ -22,6 +22,7 @@
     "express": "^4.19.4",
     "jpeg-js": "^0.4.4",
     "node-screenshots": "^0.2.8",
+    "sharp": "^0.31.3",
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {

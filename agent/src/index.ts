@@ -237,10 +237,15 @@ function startCaptureLoop(sessionId: string) {
         drawCursor(rawBuffer, w, h, cx, cy);
       }
 
-      const targetW = Math.min(w, 1024);
-      const targetH = Math.round((targetW / w) * h);
+      let resizedBuffer = rawBuffer;
+      let targetW = w;
+      let targetH = h;
 
-      const resizedBuffer = resizeRGBA(rawBuffer, w, h, targetW, targetH);
+      if (w > 1440) {
+        targetW = 1440;
+        targetH = Math.round((targetW / w) * h);
+        resizedBuffer = resizeRGBA(rawBuffer, w, h, targetW, targetH);
+      }
 
       const jpegImageData = {
         data: resizedBuffer,
@@ -248,7 +253,7 @@ function startCaptureLoop(sessionId: string) {
         height: targetH
       };
 
-      const jpegRaw = jpeg.encode(jpegImageData, 55); // Quality 55
+      const jpegRaw = jpeg.encode(jpegImageData, 75); // Quality 75
       const base64Frame = jpegRaw.data.toString('base64');
       socket.emit('agent:frame', { sessionId, frame: base64Frame });
     } catch (err) {
