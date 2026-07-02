@@ -1,4 +1,5 @@
-import { JoinRequest, Session } from './types.js';
+import { JoinRequest, Session } from './types';
+import { getComputer, createComputer, touchComputer } from './db';
 
 const sessionMap = new Map<string, Session>();
 const SESSION_TIMEOUT = 1000 * 60 * 20; // 20 minutos
@@ -86,8 +87,25 @@ export function configureSessionCredentials(sessionId: string, customName?: stri
     // Verificar se já existe outra sessão ativa com este mesmo nome (case-insensitive)
     for (const s of sessionMap.values()) {
       if (s.sessionId !== sessionId && s.customName?.toLowerCase() === customName.toLowerCase()) {
-        return { success: false, error: 'Este nome de sessão já está em uso.' };
+        return { success: false, error: 'Este nome de sessão já está em uso por outra sessão ativa.' };
       }
+    }
+
+    // Verificar no banco de dados
+    const existing = getComputer(customName);
+    if (existing) {
+      // O computador já existe no DB — verificar a senha para permitir reconexão
+      if (!customPassword || existing.password !== customPassword) {
+        return { success: false, error: 'Este nome de computador já está registrado. Forneça a senha correta para reconectar.' };
+      }
+      // Senha correta — atualizar last_seen e vincular à sessão
+      touchComputer(customName);
+    } else {
+      // Novo computador — registrar no banco de dados
+      if (!customPassword) {
+        return { success: false, error: 'É necessário definir uma senha para registrar o computador.' };
+      }
+      createComputer(customName, customPassword);
     }
   }
 
@@ -97,14 +115,23 @@ export function configureSessionCredentials(sessionId: string, customName?: stri
 }
 
 export function findSessionByName(customName: string, customPassword?: string): { success: boolean; sessionId?: string; error?: string } {
+  // Primeiro verificar as credenciais no banco de dados
+  const computer = getComputer(customName);
+  if (!computer) {
+    return { success: false, error: 'Nome de computador não encontrado.' };
+  }
+
+  if (computer.password !== customPassword) {
+    return { success: false, error: 'Senha incorreta.' };
+  }
+
+  // Credenciais válidas — encontrar a sessão ativa vinculada a este nome
   for (const session of sessionMap.values()) {
     if (session.customName?.toLowerCase() === customName.toLowerCase()) {
-      if (session.customPassword === customPassword) {
-        return { success: true, sessionId: session.sessionId };
-      } else {
-        return { success: false, error: 'Senha incorreta para esta sessão.' };
-      }
+      touchComputer(customName);
+      return { success: true, sessionId: session.sessionId };
     }
   }
-  return { success: false, error: 'Nome de sessão não encontrado.' };
+
+  return { success: false, error: 'Computador encontrado, mas não está online no momento.' };
 }

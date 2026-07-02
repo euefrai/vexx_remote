@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getSocket, disconnectSocket } from '../services/socketService';
 import { useSessionStore } from '../store/sessionStore';
+import { useSavedCredentials } from '../hooks/useSavedCredentials';
 
 import { ScreenView } from '../components/remote/ScreenView';
 import { TouchController, RemoteInputEvent } from '../components/remote/TouchController';
@@ -11,6 +12,7 @@ export default function ClientPage() {
   const [searchParams] = useSearchParams();
   const defaultCode = searchParams.get('code') ?? '';
   const { setSessionId, setRole } = useSessionStore();
+  const { credentials, saveCredentials } = useSavedCredentials();
   const socket = useMemo(() => getSocket(), []);
   const mediaRef = useRef<HTMLElement>(null);
 
@@ -24,6 +26,16 @@ export default function ClientPage() {
   const [accessMethod, setAccessMethod] = useState<'code' | 'credentials'>('code');
   const [clientCustomName, setClientCustomName] = useState('');
   const [clientCustomPassword, setClientCustomPassword] = useState('');
+
+  useEffect(() => {
+    if (credentials.name) {
+      setClientCustomName(credentials.name);
+      setAccessMethod('credentials');
+    }
+    if (credentials.password) {
+      setClientCustomPassword(credentials.password);
+    }
+  }, [credentials]);
   
   const [kbdOpen, setKbdOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -119,6 +131,7 @@ export default function ClientPage() {
           throw new Error(result.error || 'Erro ao autenticar');
         }
         
+        saveCredentials(clientCustomName, clientCustomPassword);
         setSessionCode(result.sessionId);
         if (result.approved) {
           setApproved(true);

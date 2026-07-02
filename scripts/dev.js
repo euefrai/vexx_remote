@@ -3,22 +3,28 @@ const path = require('path');
 
 // Limpar processos zumbis antes de iniciar
 console.log('Limpando portas e processos antigos...');
-try {
-  if (process.platform === 'win32') {
-    // Para processos nas portas 5173, 5174 e 4000
-    execSync('powershell -Command "$pids = Get-NetTCPConnection -LocalPort 5173, 5174, 4000 -ErrorAction SilentlyContinue | Where-Object OwningProcess -ne 0 | Select-Object -ExpandProperty OwningProcess | Unique; if ($pids) { Stop-Process -Id $pids -Force -ErrorAction SilentlyContinue }"');
-    // Para instâncias órfãs do cloudflared e ngrok
-    execSync('powershell -Command "Stop-Process -Name cloudflared -Force -ErrorAction SilentlyContinue"');
-    execSync('powershell -Command "Stop-Process -Name ngrok -Force -ErrorAction SilentlyContinue"');
-  } else {
-    execSync('npx kill-port 5173 5174 4000 >/dev/null 2>&1 || true');
-    execSync('killall cloudflared >/dev/null 2>&1 || true');
-    execSync('killall ngrok >/dev/null 2>&1 || true');
+
+function tryExec(cmd) {
+  try {
+    execSync(cmd, { stdio: ['ignore', 'ignore', 'ignore'] });
+  } catch (e) {
+    // Ignorar — o processo pode não existir
   }
-  console.log('Portas e processos antigos limpos.');
-} catch (e) {
-  // Ignorar erros se as portas já estiverem livres ou comandos falharem
 }
+
+if (process.platform === 'win32') {
+  // Para processos nas portas 5173, 5174 e 4000
+  tryExec('powershell -Command "$pids = Get-NetTCPConnection -LocalPort 5173, 5174, 4000 -ErrorAction SilentlyContinue | Where-Object OwningProcess -ne 0 | Select-Object -ExpandProperty OwningProcess | Sort-Object -Unique; if ($pids) { Stop-Process -Id $pids -Force -ErrorAction SilentlyContinue }"');
+  // Para instâncias órfãs do cloudflared e ngrok
+  tryExec('powershell -Command "Stop-Process -Name cloudflared -Force -ErrorAction SilentlyContinue"');
+  tryExec('powershell -Command "Stop-Process -Name ngrok -Force -ErrorAction SilentlyContinue"');
+} else {
+  tryExec('npx kill-port 5173 5174 4000 >/dev/null 2>&1 || true');
+  tryExec('killall cloudflared >/dev/null 2>&1 || true');
+  tryExec('killall ngrok >/dev/null 2>&1 || true');
+}
+console.log('Portas e processos antigos limpos.');
+
 
 
 function start(name, command, args, opts = {}) {

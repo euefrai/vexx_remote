@@ -6,6 +6,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { createSession, getSession, joinHost, addRequest, approveClient, rejectClient, clientConnected, pruneSessions, configureSessionCredentials, findSessionByName } from './session';
 import { startTunnel, getTunnelUrl } from './tunnelManager';
+import { initDatabase } from './db';
 
 const app = express();
 const server = http.createServer(app);
@@ -151,12 +152,17 @@ io.on('connection', (socket) => {
 setInterval(pruneSessions, 1000 * 30);
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
-server.listen(PORT, async () => {
-  console.log(`VEXX Remote signaling server running at http://localhost:${PORT}`);
-  try {
-    const url = await startTunnel(5173);
-    console.log(`[Init] Tunnel is ready at: ${url}`);
-  } catch (err) {
-    console.error(`[Init] Could not start tunnel:`, err);
-  }
-});
+
+(async () => {
+  await initDatabase();
+
+  server.listen(PORT, async () => {
+    console.log(`VEXX Remote signaling server running at http://localhost:${PORT}`);
+    try {
+      const url = await startTunnel(5173);
+      console.log(`[Init] Tunnel is ready at: ${url}`);
+    } catch (err) {
+      console.error(`[Init] Could not start tunnel:`, err);
+    }
+  });
+})();

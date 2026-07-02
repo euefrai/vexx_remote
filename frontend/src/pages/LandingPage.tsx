@@ -5,81 +5,77 @@ export default function LandingPage() {
   const navigate = useNavigate();
 
   return (
-    <main className="relative flex min-h-screen flex-col items-center justify-center px-6 py-12">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(108,114,255,0.25),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(255,92,184,0.18),transparent_25%)]" />
-      <div className="relative z-10 flex w-full max-w-6xl flex-col gap-12 rounded-[32px] border border-white/10 bg-slate-950/90 p-10 shadow-glow backdrop-blur-xl">
-        <section className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
-          <div className="space-y-6">
-            <span className="inline-flex rounded-full bg-violet-500/15 px-4 py-2 text-sm text-violet-200 ring-1 ring-violet-400/15">
-              VEXX Remote — controle em tempo real com UX premium
-            </span>
-            <h1 className="text-5xl font-semibold tracking-tight text-slate-50 sm:text-6xl">
-              Acesso remoto veloz, simples e seguro.
-            </h1>
-            <p className="max-w-2xl text-lg leading-8 text-slate-300">
-              Crie uma sessão em segundos. Compartilhe tela, aprove e controle com gestos ou mouse. Perfeito para desktop, mobile e tablets.
+    <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-background-tertiary font-sans">
+      <div className="w-full max-w-3xl space-y-8">
+        
+        {/* Header section */}
+        <div className="text-center space-y-4">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-background-secondary border-[0.5px] border-border-tertiary mb-2">
+            <i className="ti ti-devices text-[24px] text-text-primary" aria-hidden="true"></i>
+          </div>
+          <h1 className="text-[22px] font-medium text-text-primary">VEXX Remote</h1>
+          <p className="text-[16px] leading-[1.7] text-text-secondary max-w-xl mx-auto">
+            Acesso remoto de baixa latência, veloz e seguro. Controle seu computador de qualquer lugar com uma interface premium e limpa.
+          </p>
+        </div>
+
+        {/* Action Cards */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          {/* Host Card */}
+          <div 
+            onClick={() => navigate('/host')}
+            className="flex flex-col gap-4 bg-background-primary border-[0.5px] border-border-tertiary rounded-lg p-[1rem_1.25rem] cursor-pointer hover:border-border-secondary transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <i className="ti ti-server text-[20px] text-text-info" aria-hidden="true"></i>
+              <h2 className="text-[16px] font-medium text-text-primary">Criar Sessão (Host)</h2>
+            </div>
+            <p className="text-[13px] text-text-secondary flex-1">
+              Configure este dispositivo para ser controlado remotamente. Defina um nome e senha para acesso.
             </p>
-            <div className="flex flex-wrap gap-4">
-              <button
-                onClick={() => navigate('/host')}
-                className="rounded-full bg-violet-500 px-6 py-3 text-sm font-semibold text-white transition hover:bg-violet-400"
-              >
-                Criar Sessão
-              </button>
-              <button
-                onClick={() => navigate('/client')}
-                className="rounded-full border border-slate-700 bg-slate-900/80 px-6 py-3 text-sm font-semibold text-slate-100 transition hover:border-slate-500"
-              >
-                Entrar em Sessão
+            <div className="pt-2">
+              <button className="bg-transparent border-[0.5px] border-border-secondary rounded-md text-[13px] px-[12px] py-[6px] text-text-primary hover:border-border-primary transition-colors">
+                Configurar Host
               </button>
             </div>
           </div>
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="relative overflow-hidden rounded-[28px] border border-white/10 bg-slate-900/80 p-6 shadow-xl"
-          >
-            <div className="absolute inset-x-0 top-0 h-1/2 bg-slate-800/80" />
-            <div className="relative space-y-5">
-              <div className="flex items-center gap-3">
-                <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-800 text-slate-200">V</span>
-                <div>
-                  <p className="text-sm text-slate-400">Conexão habilitada</p>
-                  <p className="text-base font-semibold text-slate-100">100ms latency</p>
-                </div>
-              </div>
-              <div className="grid gap-4 rounded-3xl bg-slate-950/95 p-5">
-                <div className="space-y-2">
-                  <div className="h-48 rounded-3xl bg-gradient-to-br from-violet-500/20 via-slate-900 to-slate-800 p-5" />
-                  <div className="flex items-center justify-between text-sm text-slate-400">
-                    <span>Stream de tela</span>
-                    <span>4K adaptive</span>
-                  </div>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {['PC → PC', 'Mobile → PC', 'Tablet → PC'].map((item) => (
-                    <div key={item} className="rounded-3xl border border-white/5 bg-slate-900/90 p-4 text-center text-sm text-slate-300">
-                      {item}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </section>
 
-        <section className="grid gap-6 rounded-[28px] border border-white/10 bg-slate-900/90 p-8 text-slate-300 sm:grid-cols-3">
-          {[
-            { title: 'Baixa latência', description: 'WebRTC nativo, sinais otimizados e reconexão inteligente.' },
-            { title: 'Aprovação segura', description: 'Host controla cada novo dispositivo e mantém sessões temporárias.' },
-            { title: 'UI premium', description: 'Design clean, micro animações e experiência instantânea.' },
-          ].map((item) => (
-            <div key={item.title} className="space-y-3 rounded-3xl bg-slate-950/80 p-6 shadow-sm shadow-slate-950/20">
-              <h3 className="text-lg font-semibold text-slate-100">{item.title}</h3>
-              <p className="text-sm leading-6 text-slate-400">{item.description}</p>
+          {/* Client Card */}
+          <div 
+            onClick={() => navigate('/client')}
+            className="flex flex-col gap-4 bg-background-primary border-[0.5px] border-border-tertiary rounded-lg p-[1rem_1.25rem] cursor-pointer hover:border-border-secondary transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <i className="ti ti-device-laptop text-[20px] text-text-success" aria-hidden="true"></i>
+              <h2 className="text-[16px] font-medium text-text-primary">Conectar (Client)</h2>
             </div>
-          ))}
-        </section>
+            <p className="text-[13px] text-text-secondary flex-1">
+              Acesse um computador remotamente. Você precisará do nome e senha definidos pelo host.
+            </p>
+            <div className="pt-2">
+              <button className="bg-transparent border-[0.5px] border-border-secondary rounded-md text-[13px] px-[12px] py-[6px] text-text-primary hover:border-border-primary transition-colors">
+                Fazer Login
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Features list */}
+        <div className="grid gap-3 sm:grid-cols-3 pt-4">
+          <div className="flex items-center gap-2 bg-background-secondary rounded-md p-[0.625rem_0.75rem] border-[0.5px] border-border-tertiary">
+            <i className="ti ti-bolt text-[16px] text-text-secondary" aria-hidden="true"></i>
+            <span className="text-[13px] text-text-secondary">Baixa Latência WebRTC</span>
+          </div>
+          <div className="flex items-center gap-2 bg-background-secondary rounded-md p-[0.625rem_0.75rem] border-[0.5px] border-border-tertiary">
+            <i className="ti ti-lock text-[16px] text-text-secondary" aria-hidden="true"></i>
+            <span className="text-[13px] text-text-secondary">Conexão Segura</span>
+          </div>
+          <div className="flex items-center gap-2 bg-background-secondary rounded-md p-[0.625rem_0.75rem] border-[0.5px] border-border-tertiary">
+            <i className="ti ti-devices-pc text-[16px] text-text-secondary" aria-hidden="true"></i>
+            <span className="text-[13px] text-text-secondary">Multiplataforma</span>
+          </div>
+        </div>
+
       </div>
     </main>
   );

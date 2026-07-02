@@ -8,7 +8,7 @@ function App() {
   const location = useLocation();
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <div className="min-h-screen bg-background-tertiary text-text-primary font-sans">
       <AnimatePresence mode="wait">
         <motion.div
           key={location.pathname}

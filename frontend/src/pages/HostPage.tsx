@@ -3,13 +3,14 @@ import { Link } from 'react-router-dom';
 import QRCode from 'qrcode.react';
 import { getSocket, disconnectSocket } from '../services/socketService';
 import { useSessionStore } from '../store/sessionStore';
-
+import { useSavedCredentials } from '../hooks/useSavedCredentials';
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
 
 type JoinRequest = { clientId: string; device: string };
 
 export default function HostPage() {
   const { setSessionId, setRole } = useSessionStore();
+  const { credentials, saveCredentials: saveLocalCredentials } = useSavedCredentials();
   const [status, setStatus] = useState('Aguardando criação');
   const [requests, setRequests] = useState<JoinRequest[]>([]);
   const [clientsConnected, setClientsConnected] = useState(0);
@@ -23,6 +24,10 @@ export default function HostPage() {
   const [customPassword, setCustomPassword] = useState('');
   const [credentialsStatus, setCredentialsStatus] = useState<{ type: 'error' | 'success'; message: string } | null>(null);
 
+  useEffect(() => {
+    if (credentials.name) setCustomName(credentials.name);
+    if (credentials.password) setCustomPassword(credentials.password);
+  }, [credentials]);
   const [agentOnline, setAgentOnline] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
 
@@ -174,7 +179,7 @@ export default function HostPage() {
     setTimeout(() => setCopiedUrl(false), 2000);
   };
 
-  const saveCredentials = async () => {
+  const handleSaveCredentials = async () => {
     if (!localSession) return;
     try {
       setCredentialsStatus(null);
@@ -191,6 +196,7 @@ export default function HostPage() {
       if (!response.ok || result.error) {
         throw new Error(result.error || 'Erro ao configurar credenciais');
       }
+      saveLocalCredentials(customName, customPassword);
       setCredentialsStatus({ type: 'success', message: 'Credenciais salvas com sucesso!' });
     } catch (error: any) {
       setCredentialsStatus({ type: 'error', message: error.message || 'Erro ao salvar credenciais' });
@@ -422,7 +428,7 @@ export default function HostPage() {
                   )}
                 </span>
                 <button
-                  onClick={saveCredentials}
+                  onClick={handleSaveCredentials}
                   disabled={!localSession}
                   className="bg-background-info border-[0.5px] border-border-info rounded-md text-[13px] px-4 py-1.5 text-text-primary hover:bg-background-secondary active:scale-[0.98] transition-transform disabled:opacity-50 disabled:pointer-events-none"
                 >

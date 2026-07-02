@@ -14,7 +14,8 @@
     "express": "^4.19.4",
     "helmet": "^7.0.1",
     "jpeg-js": "^0.4.4",
-    "socket.io": "^4.7.2"
+    "socket.io": "^4.7.2",
+    "sql.js": "^1.14.1"
   },
   "optionalDependencies": {
     "robotjs": "^0.6.0"
